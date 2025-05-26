@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import { outputPlayer } from "../concepts/basic-usage";
 
 export const basicUsageController = async (
