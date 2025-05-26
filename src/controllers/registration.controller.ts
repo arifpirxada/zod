@@ -2,24 +2,22 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken"
 import userModel from "../models/user.model"
 import bcrypt from "bcryptjs"
+import { loginSchema, signupSchema } from "../schemas/user.schema";
 
 export const signupController = async (
     req: Request,
     res: Response
 ) => {
-    const userData = req.body;
+    const validated = signupSchema.parse(req.body) // Zod validataion
 
-    const newUser = new userModel({
-        name: userData.name,
-        email: userData.email,
-        password: userData.password
-    })
+    const JWT_SECRET = process.env.JWT_SECRET_KEY;
+    if (!JWT_SECRET) throw new Error("JWT_SECRET_KEY is not defined in environment variables");
 
-    if (!process.env.JWT_SECRET_KEY) throw new Error("JWT_SECRET_KEY is not defined in environment variables");
+    const newUser = new userModel(validated);
 
-    newUser.token = jwt.sign({ id: newUser._id.toString() }, process.env.JWT_SECRET_KEY)
+    newUser.token = jwt.sign({ id: newUser._id.toString() }, JWT_SECRET)
 
-    newUser.save();
+    await newUser.save();
 
     res.cookie("auth", newUser.token, {
         httpOnly: true,
@@ -37,28 +35,24 @@ export const loginController = async (
     req: Request,
     res: Response
 ) => {
-    const userData = req.body;
-    const existingUser = await userModel.findOne({ email: userData.email });
+    const validated = loginSchema.parse(req.body);
+    const { email, password } = validated;
 
+    const existingUser = await userModel.findOne({ email });
     if (!existingUser) {
-        res.status(400).json({ success: false, message: "User not found!" });
-        return;
+        return res.status(400).json({ success: false, message: "User not found!" });
     }
 
-    const passMatch = await bcrypt.compare(userData.password, existingUser.password);
-
+    const passMatch = await bcrypt.compare(password, existingUser.password);
     if (!passMatch) {
-        res.status(400).json({ success: false, message: "Incorrect password!" });
-        return;
+        return res.status(400).json({ success: false, message: "Incorrect password!" });
     }
 
-    if (!process.env.JWT_SECRET_KEY) throw new Error("JWT_SECRET_KEY is not defined in environment variables");
+    const JWT_SECRET = process.env.JWT_SECRET_KEY;
+    if (!JWT_SECRET) throw new Error("JWT_SECRET_KEY is not defined in environment variables");
 
-    const newToken = jwt.sign({ id: existingUser._id.toString() }, process.env.JWT_SECRET_KEY)
-
-    existingUser.token = newToken;
-
-    await existingUser.save();
+    const newToken = jwt.sign({ id: existingUser._id.toString() }, JWT_SECRET)
+    await userModel.updateOne({ _id: existingUser._id }, { token: newToken });
 
     res.cookie("auth", newToken, {
         httpOnly: true,

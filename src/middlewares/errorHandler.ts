@@ -7,8 +7,6 @@ export const errorHandler: ErrorRequestHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
-    console.error("Error caught in errorHandler:", err);
-
     if (err instanceof ZodError) {
         res.status(422).json({
             success: false,
